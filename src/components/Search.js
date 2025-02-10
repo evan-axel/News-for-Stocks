@@ -1,3 +1,5 @@
+"use client"; // Add this line at the very top
+
 import React, { useState, useEffect } from 'react';
 import { Search as SearchIcon, Calendar, Tag } from 'lucide-react';
 

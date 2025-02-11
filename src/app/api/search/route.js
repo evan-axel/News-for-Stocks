@@ -1,34 +1,28 @@
 // app/api/search/route.js
-import { NextResponse } from 'next/server';
-
-export async function POST(req) {
+export async function POST(request) {
   try {
-    const { query } = await req.json();
+    const { query } = await request.json();
     
-    // For now, return a test response to verify the API is working
-    return NextResponse.json({
-      hits: [
-        {
-          id: '1',
-          symbol: 'TEST',
-          company: 'Test Company',
-          price: 2.50,
-          market_cap: '$150M',
-          industry: 'Technology',
-          date: new Date().toISOString().split('T')[0],
-          news: [
-            {
-              title: 'Test News Item',
-              url: '#'
-            }
-          ]
-        }
-      ]
+    const response = await fetch('https://api.orama.com/v1/search', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${process.env.ORAMA_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        query,
+        index: 'small_caps'  // Your Orama index name
+      })
     });
-
+    if (!response.ok) {
+      throw new Error(`Orama API error: ${response.statusText}`);
+    }
+    const data = await response.json();
+    return Response.json(data);
+    
   } catch (error) {
     console.error('Search error:', error);
-    return NextResponse.json(
+    return Response.json(
       { error: 'Failed to perform search' },
       { status: 500 }
     );

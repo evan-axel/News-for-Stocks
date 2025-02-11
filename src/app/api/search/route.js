@@ -42,4 +42,28 @@ export async function POST(request) {
     }
 }
 
-// ... (fetchNewsData function remains the same)
+async function fetchNewsData(symbol) {
+    const apiKey = process.env.ALPHA_VANTAGE_API_KEY;
+    const url = `https://www.alphavantage.co/query?function=NEWS_SENTIMENT&symbol=${symbol}&apikey=${apiKey}`;
+
+    try {
+        console.log("Fetching news from URL:", url); // Log the URL
+        const response = await fetch(url);
+        console.log("Response status:", response.status); // Log the response status
+
+        if (!response.ok) {
+            const errorText = await response.text(); // Get error details from API
+            console.error(`Error fetching news for ${symbol}: ${response.status} ${response.statusText} - ${errorText}`); // Log detailed error
+            return null;
+        }
+
+        const data = await response.json();
+        console.log("Raw news data:", data); // Log the raw data
+
+        return data.feed || [];
+
+    } catch (error) {
+        console.error("Error in fetchNewsData:", error); // Log any errors during fetch
+        return null;
+    }
+}

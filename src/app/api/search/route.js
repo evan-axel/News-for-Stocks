@@ -1,40 +1,45 @@
-export async function POST(request) {
+// app/api/search/route.js
+import { NextResponse } from 'next/server';
+
+// ... (rest of the code - same as before)
+
+async function fetchFullText(symbol, filingType) {
+    const apiKey = process.env.ALPHA_VANTAGE_API_KEY;
+
     try {
-        const { query } = await request.json();
+        const marketCapURL = `https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${symbol}&apikey=${apiKey}`;
+        const marketCapResponse = await fetch(marketCapURL);
+        if (!marketCapResponse.ok) return null;
+        const marketCapData = await marketCapResponse.json();
+        const marketCap = parseFloat(marketCapData['Global Quote']['04. price']) * parseFloat(marketCapData['Global Quote']['10. volume']);
+        if (isNaN(marketCap) || marketCap > 1000000000) return null;
 
-        // Input Validation (Optional)
-        if (typeof query !== 'string' || query.trim() === '') {
-            return Response.json({ error: 'Invalid search query' }, { status: 400 });
-        }
-
-        const searchBody = { query, index: 'small_caps' };
-
-        const response = await fetch('https://api.orama.com/v1/search', {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${process.env.ORAMA_API_KEY}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(searchBody)
-        });
-
-        if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(`Orama API error: ${response.statusText} - ${errorText}`); // Include errorText
-        }
-
-        const data = await response.json();
-        return Response.json(data);
+        const filingsURL = `https://www.alphavantage.co/query?function=${filingType}&symbol=${symbol}&apikey=${apiKey}`;
+        const filingsResponse = await fetch(filingsURL);
+        if (!filingsResponse.ok) return null;
+        const filingsData = await filingsResponse.json();
+        return extractTextFromFiling(filingsData, filingType);
 
     } catch (error) {
-        console.error('Search error:', error);
-        return Response.json(
-            {
-                error: 'Failed to perform search',
-                details: `Orama API returned an error: ${error.message}`, // More specific
-                timestamp: new Date().toISOString()
-            },
-            { status: 502 } // Or 503, depending on the nature of the Orama API error
-        );
+        console.error("Error in fetchFullText:", error);
+        return null;
     }
 }
+
+function extractTextFromFiling(data, filingType) {
+    if (!data) return "No data available";
+
+    switch (filingType) {
+        case "NEWS": // Example: News (replace with your actual logic)
+            if (data.feed && data.feed.length > 0) {
+              return data.feed.map(item => `${item.title}\n${item.summary}`).join('\n\n');
+            } else {
+              return "No news found.";
+            }
+        // Add other cases for different filing types as needed
+        default:
+            return JSON.stringify(data); // Default case (for debugging - remove in production)
+    }
+}
+
+// ... (rest of the code - same as before)

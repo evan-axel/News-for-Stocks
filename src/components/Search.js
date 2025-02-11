@@ -44,7 +44,8 @@ const Search = () => {
     setExpandedTerms(Array.from(expanded));
   }, [searchQuery]);
 
-  const handleSearch = async () => {
+ // Inside your handleSearch function in Search.js
+const handleSearch = async () => {
     if (!searchQuery.trim() && selectedTerms.length === 0) return;
     
     setIsLoading(true);
@@ -56,6 +57,8 @@ const Search = () => {
         ...selectedTerms
       ].filter(Boolean).join(' OR ');
 
+      console.log('Sending search request with terms:', searchTerms); // Debug log
+
       const response = await fetch('/api/search', {
         method: 'POST',
         headers: {
@@ -64,13 +67,23 @@ const Search = () => {
         body: JSON.stringify({ query: searchTerms })
       });
 
-      if (!response.ok) throw new Error('Search failed');
+      console.log('Response status:', response.status); // Debug log
       
       const data = await response.json();
+      console.log('Response data:', data); // Debug log
+
+      if (!response.ok) {
+        throw new Error(data.details || 'Search failed');
+      }
+      
       setResults(data.hits || []);
+      
+      // Log results for debugging
+      console.log('Setting results:', data.hits || []);
+      
     } catch (err) {
-      setError('Failed to perform search. Please try again.');
-      console.error('Search error:', err);
+      setError(`Search error: ${err.message}`);
+      console.error('Detailed search error:', err);
     } finally {
       setIsLoading(false);
     }

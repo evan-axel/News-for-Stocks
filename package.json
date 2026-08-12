@@ -2,15 +2,20 @@
   "name": "news-for-stocks",
   "version": "0.1.0",
   "private": true,
-  "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start"
+  "workspaces": [
+    "apps/worker",
+    "apps/web"
+  ],
+  "engines": {
+    "node": ">=20.11"
   },
-  "dependencies": {
-    "next": "^14.0.0",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "lucide-react": "^0.292.0"
+  "scripts": {
+    "dev": "npm run dev --workspace=apps/worker",
+    "dev:web": "npm run dev --workspace=apps/web",
+    "build": "npm run build --workspace=apps/worker",
+    "start": "npm run start --workspace=apps/worker",
+    "test": "npm run test --workspace=apps/worker",
+    "typecheck": "npm run typecheck --workspace=apps/worker",
+    "seed": "npm run seed --workspace=apps/worker"
   }
 }

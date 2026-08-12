@@ -47,6 +47,8 @@ X/Twitter is deliberately not included — the API is ~$200/mo for usable read a
 
 ## Setup
 
+> **New here? Follow [SETUP.md](./SETUP.md) instead.** It's a click-by-click walkthrough — which accounts to create, what to paste where, and a check after every step. The section below is the condensed version.
+
 You need three accounts. Budget about 30 minutes.
 
 ### 1. Install

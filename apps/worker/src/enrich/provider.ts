@@ -5,6 +5,7 @@ import type {
   InsiderTrade,
   PricePoint,
   Transcript,
+  TranscriptRef,
 } from '../types.js';
 
 export interface CompanyProfile {
@@ -41,6 +42,8 @@ export interface FinancialsProvider {
     ref: CompanyRef,
     opts?: { year?: number; quarter?: number },
   ): Promise<Transcript | null>;
+  /** Which calls exist, newest first — lets the user pick a quarter by name. */
+  listTranscripts?(ref: CompanyRef): Promise<TranscriptRef[] | null>;
 }
 
 export function emptyPeriod(label: string, endDate: string): FinancialPeriod {

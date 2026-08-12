@@ -181,7 +181,24 @@ stop watching reverse splits
 
 Commands: `/help` `/status` `/pause` `/resume` `/reset`
 
-The agent has tools for company snapshots, historical financials, transcripts (fetch and search within), SEC filings, news search, your alert history, and changing what's watched. It's instructed never to state a number that didn't come back from a tool — if data is unavailable it says so rather than estimating.
+The agent has tools for company snapshots, historical financials, transcripts, SEC filings, news search, your alert history, and changing what's watched. It's instructed never to state a number that didn't come back from a tool — if data is unavailable it says so rather than estimating.
+
+### Earnings call transcripts
+
+Three tools cover this: list which calls exist, fetch one, and search inside it.
+
+```
+which calls do you have for ACME
+latest transcript for ACME
+what did ACME say about pricing on the Q2 call
+compare what they said about margins in Q2 vs Q3
+```
+
+- Transcripts are **cached to disk on first fetch**, so follow-up questions about the same call cost nothing and keep working after a restart.
+- Searching returns the matching passages with surrounding context rather than the whole transcript — faster, cheaper, and the agent can quote the passage back to you.
+- Sources, in order: whichever provider you configured (FMP, Fiscal.ai, or an MCP transcripts server), then a **free fallback** that pulls the earnings press release out of the company's latest 8-K.
+
+⚠️ That free fallback is a **press release, not a call transcript** — it has no Q&A section, which is usually the most informative part of a call. The system labels it explicitly and the agent is instructed to tell you when it's using one, so the two never get conflated.
 
 ---
 

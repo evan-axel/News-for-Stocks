@@ -7,6 +7,7 @@ import type {
   FilterKind,
   Keyword,
   SourceKind,
+  Transcript,
 } from '../types.js';
 
 /* -------------------------------------------------------------------------- */
@@ -63,6 +64,31 @@ function toFilter(row: FilterRow): Filter {
     mode: row.mode === 'exclude' ? 'exclude' : 'include',
     enabled: row.enabled === 1,
     createdAt: new Date(`${row.created_at}Z`),
+  };
+}
+
+interface TranscriptRow {
+  ticker: string;
+  period: string;
+  fiscal_year: number | null;
+  fiscal_quarter: number | null;
+  event_date: string;
+  kind: string;
+  content: string;
+  source: string;
+  fetched_at: string;
+}
+
+function toTranscript(row: TranscriptRow): Transcript {
+  return {
+    ticker: row.ticker,
+    period: row.period,
+    date: row.event_date,
+    content: row.content,
+    source: row.source,
+    fiscalYear: row.fiscal_year,
+    fiscalQuarter: row.fiscal_quarter,
+    kind: row.kind === 'earnings_release' ? 'earnings_release' : 'call_transcript',
   };
 }
 
@@ -366,6 +392,66 @@ export class Repo {
          ON CONFLICT(ticker) DO UPDATE SET payload=excluded.payload, fetched_at=excluded.fetched_at`,
       )
       .run(ticker.toUpperCase(), JSON.stringify(ctx));
+  }
+
+  /* --- transcripts ------------------------------------------------------ */
+
+  cacheTranscript(t: Transcript): void {
+    this.db
+      .prepare(
+        `INSERT INTO transcripts
+           (ticker, period, fiscal_year, fiscal_quarter, event_date, kind, content, source, fetched_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+         ON CONFLICT(ticker, period) DO UPDATE SET
+           content=excluded.content, source=excluded.source, fetched_at=excluded.fetched_at,
+           event_date=excluded.event_date, kind=excluded.kind`,
+      )
+      .run(
+        t.ticker.toUpperCase(),
+        t.period,
+        t.fiscalYear ?? null,
+        t.fiscalQuarter ?? null,
+        t.date ?? '',
+        t.kind ?? 'call_transcript',
+        t.content,
+        t.source,
+      );
+  }
+
+  /**
+   * Read a cached transcript. With no year/quarter, returns the newest held —
+   * ordering by fiscal period rather than fetch time, so pulling an old quarter
+   * doesn't make it look like the latest.
+   */
+  getCachedTranscript(
+    ticker: string,
+    opts: { year?: number; quarter?: number } = {},
+  ): Transcript | null {
+    const base = `SELECT * FROM transcripts WHERE ticker = ?`;
+    const row =
+      opts.year !== undefined && opts.quarter !== undefined
+        ? this.db
+            .prepare<[string, number, number], TranscriptRow>(
+              `${base} AND fiscal_year = ? AND fiscal_quarter = ?`,
+            )
+            .get(ticker.toUpperCase(), opts.year, opts.quarter)
+        : this.db
+            .prepare<[string], TranscriptRow>(
+              `${base} ORDER BY fiscal_year DESC, fiscal_quarter DESC, fetched_at DESC LIMIT 1`,
+            )
+            .get(ticker.toUpperCase());
+
+    return row ? toTranscript(row) : null;
+  }
+
+  listCachedTranscripts(ticker: string): Transcript[] {
+    return this.db
+      .prepare<[string], TranscriptRow>(
+        `SELECT * FROM transcripts WHERE ticker = ?
+         ORDER BY fiscal_year DESC, fiscal_quarter DESC`,
+      )
+      .all(ticker.toUpperCase())
+      .map(toTranscript);
   }
 
   /* --- conversation ----------------------------------------------------- */

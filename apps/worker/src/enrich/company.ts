@@ -1,7 +1,8 @@
 import { providerOrder } from '../config.js';
 import type { Repo } from '../db/repo.js';
 import { logger } from '../logger.js';
-import type { CompanyContext, CompanyRef, Transcript } from '../types.js';
+import { fetchLatestEarningsRelease } from '../sources/sec.js';
+import type { CompanyContext, CompanyRef, Transcript, TranscriptRef } from '../types.js';
 import { buildTrend } from './derive.js';
 import { FiscalAiProvider } from './fiscalai.js';
 import { FmpProvider } from './fmp.js';
@@ -103,20 +104,69 @@ export async function resolveCompanyRef(query: string, repo: Repo): Promise<Comp
 }
 
 /**
- * Latest (or a specific) earnings call transcript, from the first provider that
- * serves one. Transcripts are large, so this is deliberately not part of
- * `getCompanyContext` — it is fetched only when the conversation asks for it.
+ * Which earnings calls are available for a company, newest first.
+ * Cached quarters are merged in and flagged, so the agent can tell the user
+ * which ones it can answer about instantly versus which need a fetch.
+ */
+export async function listTranscripts(ref: CompanyRef, repo: Repo): Promise<TranscriptRef[]> {
+  const hydrated = hydrateRef(ref, repo);
+  const cached = repo.listCachedTranscripts(hydrated.ticker);
+  const cachedKeys = new Set(cached.map((t) => `${t.fiscalYear}-${t.fiscalQuarter}`));
+
+  let available: TranscriptRef[] = [];
+  for (const provider of providers()) {
+    try {
+      const list = await provider.listTranscripts?.(hydrated);
+      if (list?.length) {
+        available = list;
+        break;
+      }
+    } catch (err) {
+      logger.warn({ provider: provider.id, err: (err as Error).message }, 'transcript list failed');
+    }
+  }
+
+  if (available.length === 0) {
+    // No provider answered — at least report what we already hold.
+    return cached
+      .filter((t) => t.fiscalYear && t.fiscalQuarter)
+      .map((t) => ({
+        year: t.fiscalYear as number,
+        quarter: t.fiscalQuarter as number,
+        date: t.date,
+        cached: true,
+      }));
+  }
+
+  return available.map((r) => ({ ...r, cached: cachedKeys.has(`${r.year}-${r.quarter}`) }));
+}
+
+/**
+ * A transcript, preferring the local copy.
+ *
+ * Order is cache → provider chain → free SEC earnings release. Transcripts are
+ * both large and often metered per call, so anything fetched is persisted and
+ * every later question about the same call is free.
  */
 export async function getTranscript(
   ref: CompanyRef,
   repo: Repo,
-  opts: { year?: number; quarter?: number } = {},
+  opts: { year?: number; quarter?: number; fresh?: boolean } = {},
 ): Promise<Transcript | null> {
   const hydrated = hydrateRef(ref, repo);
+
+  if (!opts.fresh) {
+    const cached = repo.getCachedTranscript(hydrated.ticker, opts);
+    if (cached) return cached;
+  }
+
   for (const provider of providers()) {
     try {
       const t = await provider.getTranscript?.(hydrated, opts);
-      if (t?.content) return t;
+      if (t?.content) {
+        repo.cacheTranscript(t);
+        return t;
+      }
     } catch (err) {
       logger.warn(
         { provider: provider.id, err: (err as Error).message },
@@ -124,6 +174,31 @@ export async function getTranscript(
       );
     }
   }
+
+  // Nothing served a real transcript. Fall back to the earnings press release
+  // from the latest 8-K — free, and better than nothing, but clearly not a call.
+  if (hydrated.cik && opts.year === undefined) {
+    try {
+      const release = await fetchLatestEarningsRelease(hydrated.cik);
+      if (release) {
+        const transcript: Transcript = {
+          ticker: hydrated.ticker,
+          period: `Earnings release ${release.filedAt}`,
+          date: release.filedAt,
+          content: release.text,
+          source: `SEC 8-K exhibit (${release.url})`,
+          fiscalYear: null,
+          fiscalQuarter: null,
+          kind: 'earnings_release',
+        };
+        repo.cacheTranscript(transcript);
+        return transcript;
+      }
+    } catch (err) {
+      logger.warn({ err: (err as Error).message }, 'earnings release fallback failed');
+    }
+  }
+
   return null;
 }
 

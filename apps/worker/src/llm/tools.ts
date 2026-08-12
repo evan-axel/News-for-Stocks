@@ -1,7 +1,12 @@
 import type Anthropic from '@anthropic-ai/sdk';
 import type { Repo } from '../db/repo.js';
 import { formatMoney, formatPercent } from '../enrich/derive.js';
-import { getCompanyContext, getTranscript, resolveCompanyRef } from '../enrich/company.js';
+import {
+  getCompanyContext,
+  getTranscript,
+  listTranscripts,
+  resolveCompanyRef,
+} from '../enrich/company.js';
 import { logger } from '../logger.js';
 import { describeFilter, MARKET_CAP_PRESETS } from '../matching/filters.js';
 import { fetchText } from '../sources/http.js';
@@ -35,9 +40,19 @@ export const CHAT_TOOLS: Anthropic.Tool[] = [
     },
   },
   {
-    name: 'get_latest_transcript',
+    name: 'list_transcripts',
     description:
-      "Fetch an earnings call transcript. Returns the header plus the opening section — call search_transcript to pull specific passages out of the same transcript rather than fetching it again. Use when the user asks what management said, guidance commentary, or anything about a specific call.",
+      'List which earnings calls are available for a company, newest first, with the fiscal year and quarter of each. Call this when the user asks about a call other than the most recent one, or asks which calls you can see, or wants to compare quarters — then pass the year and quarter to get_transcript or search_transcript.',
+    input_schema: {
+      type: 'object',
+      properties: { company: { type: 'string', description: 'Ticker or company name.' } },
+      required: ['company'],
+    },
+  },
+  {
+    name: 'get_transcript',
+    description:
+      "Fetch an earnings call transcript. Returns the header plus the opening section — for anything specific, use search_transcript instead of reading the whole thing. Omit year and quarter for the most recent call. Use when the user asks what management said, guidance commentary, or anything about a specific call.",
     input_schema: {
       type: 'object',
       properties: {
@@ -51,12 +66,14 @@ export const CHAT_TOOLS: Anthropic.Tool[] = [
   {
     name: 'search_transcript',
     description:
-      'Search inside the most recently fetched transcript for a company and return the matching passages with surrounding context. Use this to answer specific questions about what was said on a call.',
+      'Search inside a transcript for a word or phrase and return the matching passages with surrounding context. This is the efficient way to answer a specific question about a call — prefer it over fetching the whole transcript. Omit year and quarter to search the most recent call.',
     input_schema: {
       type: 'object',
       properties: {
         company: { type: 'string', description: 'Ticker or company name.' },
         query: { type: 'string', description: 'Word or phrase to find, e.g. "margin" or "guidance".' },
+        year: { type: 'integer', description: 'Fiscal year. Omit for the most recent call.' },
+        quarter: { type: 'integer', description: 'Fiscal quarter 1-4. Omit for the most recent call.' },
       },
       required: ['company', 'query'],
     },
@@ -159,9 +176,6 @@ export const CHAT_TOOLS: Anthropic.Tool[] = [
   },
 ];
 
-/** Cache of the last transcript fetched per ticker, so search doesn't refetch. */
-const transcriptCache = new Map<string, Transcript>();
-
 type ToolInput = Record<string, unknown>;
 
 const str = (v: unknown): string | undefined => (typeof v === 'string' ? v : undefined);
@@ -192,8 +206,10 @@ async function dispatch(name: string, input: ToolInput, repo: Repo): Promise<str
   switch (name) {
     case 'get_company_snapshot':
       return companySnapshot(input, repo);
-    case 'get_latest_transcript':
-      return latestTranscript(input, repo);
+    case 'list_transcripts':
+      return availableTranscripts(input, repo);
+    case 'get_transcript':
+      return fetchTranscript(input, repo);
     case 'search_transcript':
       return searchTranscript(input, repo);
     case 'get_recent_filings':
@@ -233,32 +249,60 @@ async function companySnapshot(input: ToolInput, repo: Repo): Promise<string> {
   return renderCompanyContext(ctx);
 }
 
-async function latestTranscript(input: ToolInput, repo: Repo): Promise<string> {
-  const company = str(input.company);
-  if (!company) return 'Missing required "company".';
-  const ref = await resolveOrExplain(company, repo);
-
+/** Pull optional year/quarter off a tool input. */
+function periodOpts(input: ToolInput): { year?: number; quarter?: number } {
   const opts: { year?: number; quarter?: number } = {};
   const y = int(input.year);
   const q = int(input.quarter);
   if (y !== undefined) opts.year = y;
   if (q !== undefined) opts.quarter = q;
+  return opts;
+}
 
-  const transcript = await getTranscript(ref, repo, opts);
-  if (!transcript) {
-    return `No transcript available for ${ref.ticker}. Transcripts require a provider that serves them (Fiscal.ai or FMP) — check that one is configured, or that the call has been published.`;
-  }
+const NO_TRANSCRIPT_HELP =
+  'Transcripts need a provider that serves them — FMP, Fiscal.ai, or an MCP transcripts server. Without one, only the SEC earnings press release is available, and only for US filers.';
 
-  transcriptCache.set(ref.ticker.toUpperCase(), transcript);
+/** Label used everywhere a release stands in for a real call. */
+function describeKind(t: Transcript): string {
+  return t.kind === 'earnings_release'
+    ? 'EARNINGS PRESS RELEASE (not a call transcript — no Q&A section)'
+    : 'earnings call transcript';
+}
+
+async function availableTranscripts(input: ToolInput, repo: Repo): Promise<string> {
+  const company = str(input.company);
+  if (!company) return 'Missing required "company".';
+  const ref = await resolveOrExplain(company, repo);
+
+  const list = await listTranscripts(ref, repo);
+  if (!list.length) return `No earnings calls listed for ${ref.ticker}. ${NO_TRANSCRIPT_HELP}`;
+
+  return [
+    `Earnings calls available for ${ref.name} (${ref.ticker}), newest first:`,
+    ...list
+      .slice(0, 20)
+      .map((r) => `  Q${r.quarter} ${r.year}${r.date ? ` — ${r.date}` : ''}${r.cached ? '  [already downloaded]' : ''}`),
+  ].join('\n');
+}
+
+async function fetchTranscript(input: ToolInput, repo: Repo): Promise<string> {
+  const company = str(input.company);
+  if (!company) return 'Missing required "company".';
+  const ref = await resolveOrExplain(company, repo);
+
+  const transcript = await getTranscript(ref, repo, periodOpts(input));
+  if (!transcript) return `No transcript available for ${ref.ticker}. ${NO_TRANSCRIPT_HELP}`;
 
   const head = transcript.content.slice(0, 4000);
   return [
-    `Transcript: ${ref.name} (${ref.ticker}) — ${transcript.period}${transcript.date ? `, ${transcript.date}` : ''}`,
+    `${describeKind(transcript)}: ${ref.name} (${ref.ticker}) — ${transcript.period}${
+      transcript.date ? `, ${transcript.date}` : ''
+    }`,
     `Source: ${transcript.source} · ${transcript.content.length.toLocaleString()} characters total`,
     '',
     head,
     transcript.content.length > head.length
-      ? `\n[…truncated. Use search_transcript with a query to pull specific passages.]`
+      ? `\n[…truncated. Use search_transcript with a query to pull specific passages — it searches the full text.]`
       : '',
   ].join('\n');
 }
@@ -269,14 +313,9 @@ async function searchTranscript(input: ToolInput, repo: Repo): Promise<string> {
   if (!company || !query) return 'Missing required "company" or "query".';
 
   const ref = await resolveOrExplain(company, repo);
-  const key = ref.ticker.toUpperCase();
 
-  let transcript = transcriptCache.get(key);
-  if (!transcript) {
-    transcript = (await getTranscript(ref, repo, {})) ?? undefined;
-    if (!transcript) return `No transcript available for ${ref.ticker} to search.`;
-    transcriptCache.set(key, transcript);
-  }
+  const transcript = await getTranscript(ref, repo, periodOpts(input));
+  if (!transcript) return `No transcript available for ${ref.ticker} to search. ${NO_TRANSCRIPT_HELP}`;
 
   const needle = query.toLowerCase();
   const haystack = transcript.content;
@@ -293,11 +332,11 @@ async function searchTranscript(input: ToolInput, repo: Repo): Promise<string> {
   }
 
   if (hits.length === 0) {
-    return `"${query}" does not appear in the ${transcript.period} transcript for ${ref.ticker}.`;
+    return `"${query}" does not appear in the ${transcript.period} ${describeKind(transcript)} for ${ref.ticker}.`;
   }
 
   return [
-    `${hits.length} passage(s) mentioning "${query}" in ${ref.ticker} ${transcript.period}:`,
+    `${hits.length} passage(s) mentioning "${query}" in ${ref.ticker} ${transcript.period} (${describeKind(transcript)}):`,
     '',
     ...hits.map((h, i) => `[${i + 1}] ${h}`),
   ].join('\n\n');

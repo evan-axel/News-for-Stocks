@@ -8,6 +8,7 @@ import type {
   InsiderTrade,
   PricePoint,
   Transcript,
+  TranscriptRef,
 } from '../types.js';
 import { emptyPeriod, num, type CompanyProfile, type FinancialsProvider } from './provider.js';
 
@@ -247,6 +248,23 @@ export class FmpProvider implements FinancialsProvider {
   }
 
   /**
+   * Which calls FMP has for this company, newest first.
+   * The v4 endpoint returns bare tuples of [quarter, year, date].
+   */
+  async listTranscripts(ref: CompanyRef): Promise<TranscriptRef[] | null> {
+    const listed = await this.get<[number, number, string][]>(
+      FmpProvider.ENDPOINTS.transcriptList(ref.ticker),
+    );
+    if (!listed) return null;
+
+    return listed
+      .filter((r) => Array.isArray(r) && r.length >= 2)
+      .map((r) => ({ year: Number(r[1]), quarter: Number(r[0]), date: r[2] ?? '', cached: false }))
+      .filter((r) => Number.isFinite(r.year) && Number.isFinite(r.quarter))
+      .sort((a, b) => b.year - a.year || b.quarter - a.quarter);
+  }
+
+  /**
    * FMP splits transcripts across two endpoints: v4 lists which quarters exist,
    * v3 returns one quarter's text. When no quarter is requested we resolve the
    * newest from the list rather than guessing the current calendar quarter,
@@ -259,16 +277,11 @@ export class FmpProvider implements FinancialsProvider {
     let { year, quarter } = opts;
 
     if (year === undefined || quarter === undefined) {
-      const listed = await this.get<[number, number, string][]>(
-        FmpProvider.ENDPOINTS.transcriptList(ref.ticker),
-      );
-      // Rows come back as [quarter, year, date]; pick the latest by (year, quarter).
-      const newest = (listed ?? [])
-        .filter((r) => Array.isArray(r) && r.length >= 2)
-        .sort((a, b) => (b[1] ?? 0) - (a[1] ?? 0) || (b[0] ?? 0) - (a[0] ?? 0))[0];
+      const available = await this.listTranscripts(ref);
+      const newest = available?.[0];
       if (!newest) return null;
-      quarter = newest[0];
-      year = newest[1];
+      quarter = newest.quarter;
+      year = newest.year;
     }
 
     const rows = await this.get<
@@ -284,6 +297,9 @@ export class FmpProvider implements FinancialsProvider {
       date: t.date ?? '',
       content: t.content,
       source: 'Financial Modeling Prep',
+      fiscalYear: t.year ?? year,
+      fiscalQuarter: t.quarter ?? quarter,
+      kind: 'call_transcript',
     };
   }
 

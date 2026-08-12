@@ -146,4 +146,27 @@ export const migrations: Migration[] = [
       CREATE INDEX IF NOT EXISTS idx_outbox_pending ON outbox(recipient, delivered_at);
     `,
   },
+  {
+    id: '005_transcripts',
+    sql: `
+      -- Transcripts are large and often metered per call, so once fetched they
+      -- are kept. Persisting them (rather than holding one in memory) means
+      -- follow-up questions about the same call cost nothing, searching still
+      -- works after a restart, and quarters can be compared against each other.
+      CREATE TABLE IF NOT EXISTS transcripts (
+        ticker     TEXT NOT NULL,
+        period     TEXT NOT NULL,
+        fiscal_year    INTEGER,
+        fiscal_quarter INTEGER,
+        event_date TEXT NOT NULL DEFAULT '',
+        kind       TEXT NOT NULL DEFAULT 'call_transcript',
+        content    TEXT NOT NULL,
+        source     TEXT NOT NULL,
+        fetched_at TEXT NOT NULL DEFAULT (datetime('now')),
+        PRIMARY KEY (ticker, period)
+      );
+      CREATE INDEX IF NOT EXISTS idx_transcripts_recent
+        ON transcripts(ticker, fiscal_year DESC, fiscal_quarter DESC);
+    `,
+  },
 ];

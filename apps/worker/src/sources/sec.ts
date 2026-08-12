@@ -183,6 +183,8 @@ export interface FilingSummary {
   reportDate: string;
   description: string;
   url: string;
+  /** Accession number without dashes, for building archive paths. */
+  accession: string;
 }
 
 interface SubmissionsResponse {
@@ -235,6 +237,7 @@ export async function fetchRecentFilings(
       filedAt: r.filingDate?.[i] ?? '',
       reportDate: r.reportDate?.[i] ?? '',
       description: r.primaryDocDescription?.[i] ?? '',
+      accession,
       url: accession
         ? `${SEC_HOST}/Archives/edgar/data/${cikTrimmed}/${accession}/${doc}`
         : `${SEC_HOST}/cgi-bin/browse-edgar?action=getcompany&CIK=${padded}`,
@@ -242,6 +245,87 @@ export async function fetchRecentFilings(
   }
 
   return out;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Earnings release from an 8-K exhibit                                        */
+/* -------------------------------------------------------------------------- */
+
+interface ArchiveIndex {
+  directory?: { item?: { name?: string; type?: string }[] };
+}
+
+/** Phrases that distinguish an earnings 8-K from every other kind of 8-K. */
+const EARNINGS_MARKERS = [
+  'results of operations',
+  'financial results',
+  'quarterly results',
+  'fourth quarter',
+  'first quarter',
+  'second quarter',
+  'third quarter',
+  'full year results',
+  'reports results',
+  'earnings',
+];
+
+export interface EarningsRelease {
+  text: string;
+  url: string;
+  filedAt: string;
+}
+
+/**
+ * Best-effort free substitute for a paid transcript: the earnings press release
+ * companies attach to an 8-K as Exhibit 99.
+ *
+ * This is NOT a call transcript — there is no Q&A, which is usually the most
+ * informative part of a call. It is offered only when no transcript provider is
+ * configured, and callers must label it as a release, not a transcript.
+ */
+export async function fetchLatestEarningsRelease(
+  cik: string,
+  maxFilingsToCheck = 6,
+): Promise<EarningsRelease | null> {
+  const padded = cik.padStart(10, '0');
+  const cikTrimmed = String(Number(padded));
+
+  const filings = await fetchRecentFilings(padded, { limit: 20, forms: ['8-K'] });
+
+  for (const filing of filings.slice(0, maxFilingsToCheck)) {
+    if (!filing.accession) continue;
+
+    const base = `${SEC_HOST}/Archives/edgar/data/${cikTrimmed}/${filing.accession}`;
+
+    let index: ArchiveIndex;
+    try {
+      index = await secLimiter.run(() =>
+        fetchJson<ArchiveIndex>(`${base}/index.json`, {
+          userAgent: config.SEC_USER_AGENT,
+          timeoutMs: 20_000,
+          retries: 1,
+        }),
+      );
+    } catch {
+      continue;
+    }
+
+    const exhibits = (index.directory?.item ?? [])
+      .map((i) => i.name ?? '')
+      .filter((n) => /ex.?99/i.test(n) && /\.(htm|html|txt)$/i.test(n));
+
+    for (const name of exhibits) {
+      const text = await fetchFilingText(`${base}/${name}`, 120_000);
+      if (!text) continue;
+
+      const head = text.slice(0, 4000).toLowerCase();
+      if (!EARNINGS_MARKERS.some((m) => head.includes(m))) continue;
+
+      return { text, url: `${base}/${name}`, filedAt: filing.filedAt };
+    }
+  }
+
+  return null;
 }
 
 /* -------------------------------------------------------------------------- */

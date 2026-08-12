@@ -153,6 +153,23 @@ export interface Transcript {
   /** Full text; may be long — chunk before sending anywhere. */
   content: string;
   source: string;
+  fiscalYear?: number | null;
+  fiscalQuarter?: number | null;
+  /**
+   * A real call transcript, or the earnings press release pulled from an 8-K.
+   * The distinction matters: a release has no Q&A section, which is usually the
+   * most informative part of a call, so the two must never be conflated.
+   */
+  kind?: 'call_transcript' | 'earnings_release';
+}
+
+/** One entry in a company's list of available calls. */
+export interface TranscriptRef {
+  year: number;
+  quarter: number;
+  date: string;
+  /** True when we already hold the text locally. */
+  cached: boolean;
 }
 
 /** A stored, possibly-sent alert. */

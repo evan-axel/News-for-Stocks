@@ -275,11 +275,21 @@ what are you watching
 ```
 show me Apple's margins over 5 years
 how much cash does ACME have versus debt
-what did ACME's CEO say about pricing
 recent 8-Ks for ACME
 any news on lithium refining
 what did you send me today
 ```
+
+**Earnings calls:**
+
+```
+which calls do you have for ACME
+latest transcript for ACME
+what did ACME say about pricing on the Q2 call
+compare what they said about margins in Q2 vs Q3
+```
+
+Transcripts are saved after the first fetch, so asking more questions about the same call is instant and free. If you haven't paid for a data provider, the bot falls back to the earnings press release from the company's SEC filing — it'll tell you when it does, because a press release has no Q&A section.
 
 **Commands:** `/help` `/status` `/pause` `/resume` `/reset`
 

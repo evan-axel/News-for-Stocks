@@ -169,4 +169,15 @@ export const migrations: Migration[] = [
         ON transcripts(ticker, fiscal_year DESC, fiscal_quarter DESC);
     `,
   },
+  {
+    id: '006_keyword_label_only',
+    sql: `
+      -- Some useful concepts are worthless as literal phrases: "transformation"
+      -- and "new era" appear in marketing boilerplate constantly. With
+      -- match_term = 0 the term becomes a display label only and matching runs
+      -- on the precise synonyms, so the alert still reads "transformation"
+      -- while firing on "multi-year transformation plan".
+      ALTER TABLE keywords ADD COLUMN match_term INTEGER NOT NULL DEFAULT 1;
+    `,
+  },
 ];

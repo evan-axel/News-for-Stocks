@@ -28,8 +28,16 @@ Two independent axes decide whether something reaches your phone:
 
 | Axis | Question | Configured as |
 |---|---|---|
-| **Keywords** | Did something interesting happen? | `strategic review`, `going concern`, `CEO change`, … each with synonyms and noise-suppressing negations |
+| **Keywords** | Did something interesting happen? | `transformation`, `restructuring`, `divestiture`, `acquisition`, `management change`, `new CEO`, `new CFO`, `refinancing`, `new era`, `technological shift`, … each with synonyms and noise-suppressing negations |
 | **Filters** | Do I care about *this company*? | industry, sector, market-cap band, exchange, country, or specific tickers |
+
+**Shipped defaults:** 20 keywords; market cap **$50M–$20B**; every industry **except banks and biotech**.
+
+### Keeping generic keywords usable
+
+Some concepts are worthless as literal phrases — "transformation" and "new era" appear in marketing copy constantly. Those keywords are stored **label-only** (`matchTerm: false`): the term is what the alert says, but matching runs on precise phrasings like `multi-year transformation plan` or `ushering in a new era`. You get the concept without the noise.
+
+Negations do the rest of the work. `acquisition` won't fire on "customer acquisition cost"; `new CEO` won't fire on "the CEO said".
 
 An alert fires only when a keyword matches **and** the resolved company passes the filters. So "only alert me on strategic reviews at sub-$2B biotechs" is two filters plus one keyword — and you can set all of it by texting the bot.
 

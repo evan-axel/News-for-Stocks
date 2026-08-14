@@ -26,6 +26,14 @@ export interface Keyword {
   synonyms: string[];
   /** Phrases that veto a hit even when the term matched (noise suppression). */
   negations: string[];
+  /**
+   * Whether `term` itself is matched, or is only a display label.
+   *
+   * False for concepts that are meaningless as a bare phrase — "transformation"
+   * matches every press release ever written, while "multi-year transformation
+   * plan" is a real corporate event. The alert still shows the friendly label.
+   */
+  matchTerm: boolean;
   enabled: boolean;
   createdAt: Date;
 }

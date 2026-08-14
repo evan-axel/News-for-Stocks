@@ -70,7 +70,12 @@ export function findMatches(item: RawItem, keywords: Keyword[]): Match[] {
     const vetoed = keyword.negations.some((n) => n && cachedRegex(n).test(combined));
     if (vetoed) continue;
 
-    const phrases = [keyword.term, ...keyword.synonyms].filter(Boolean);
+    // A label-only keyword ("transformation") contributes no literal phrase of
+    // its own — matching runs entirely on its precise synonyms.
+    const phrases = [...(keyword.matchTerm ? [keyword.term] : []), ...keyword.synonyms].filter(
+      Boolean,
+    );
+    if (phrases.length === 0) continue;
     let found: { phrase: string; snippet: string } | null = null;
 
     for (const haystack of haystacks) {

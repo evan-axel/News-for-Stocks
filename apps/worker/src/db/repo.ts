@@ -19,6 +19,7 @@ interface KeywordRow {
   term: string;
   synonyms: string;
   negations: string;
+  match_term: number;
   enabled: number;
   created_at: string;
 }
@@ -98,6 +99,8 @@ function toKeyword(row: KeywordRow): Keyword {
     term: row.term,
     synonyms: JSON.parse(row.synonyms) as string[],
     negations: JSON.parse(row.negations) as string[],
+    // Older rows predate the column; treat a missing value as "match it".
+    matchTerm: row.match_term === undefined || row.match_term === 1,
     enabled: row.enabled === 1,
     createdAt: new Date(`${row.created_at}Z`),
   };
@@ -153,22 +156,25 @@ export class Repo {
     term: string;
     synonyms?: string[];
     negations?: string[];
+    matchTerm?: boolean;
     enabled?: boolean;
   }): Keyword {
     const term = input.term.trim().toLowerCase();
     this.db
       .prepare(
-        `INSERT INTO keywords (term, synonyms, negations, enabled)
-         VALUES (?, ?, ?, ?)
+        `INSERT INTO keywords (term, synonyms, negations, match_term, enabled)
+         VALUES (?, ?, ?, ?, ?)
          ON CONFLICT(term) DO UPDATE SET
-           synonyms  = excluded.synonyms,
-           negations = excluded.negations,
-           enabled   = excluded.enabled`,
+           synonyms   = excluded.synonyms,
+           negations  = excluded.negations,
+           match_term = excluded.match_term,
+           enabled    = excluded.enabled`,
       )
       .run(
         term,
         JSON.stringify(input.synonyms ?? []),
         JSON.stringify(input.negations ?? []),
+        input.matchTerm === false ? 0 : 1,
         input.enabled === false ? 0 : 1,
       );
     const row = this.db

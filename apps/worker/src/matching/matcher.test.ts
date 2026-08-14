@@ -7,6 +7,7 @@ function keyword(partial: Partial<Keyword> & { term: string }): Keyword {
     id: 1,
     synonyms: [],
     negations: [],
+    matchTerm: true,
     enabled: true,
     createdAt: new Date(),
     ...partial,
@@ -119,6 +120,31 @@ describe('findMatches', () => {
     const matches = findMatches(
       item({ title: 'Acme begins a strategic review' }),
       [keyword({ term: 'strategic review', enabled: false })],
+    );
+    expect(matches).toHaveLength(0);
+  });
+
+  it('does not match a label-only keyword on its bare term', () => {
+    const matches = findMatches(
+      item({ title: 'Acme announces digital transformation of its website' }),
+      [keyword({ term: 'transformation', matchTerm: false, synonyms: ['transformation plan'] })],
+    );
+    expect(matches).toHaveLength(0);
+  });
+
+  it('matches a label-only keyword on its synonyms, keeping the friendly label', () => {
+    const matches = findMatches(
+      item({ title: 'Acme unveils a multi-year transformation plan' }),
+      [keyword({ term: 'transformation', matchTerm: false, synonyms: ['transformation plan'] })],
+    );
+    expect(matches).toHaveLength(1);
+    expect(matches[0]?.keyword.term).toBe('transformation');
+  });
+
+  it('never matches a label-only keyword with no synonyms', () => {
+    const matches = findMatches(
+      item({ title: 'transformation transformation transformation' }),
+      [keyword({ term: 'transformation', matchTerm: false, synonyms: [] })],
     );
     expect(matches).toHaveLength(0);
   });

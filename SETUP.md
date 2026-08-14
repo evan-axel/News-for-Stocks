@@ -254,13 +254,16 @@ Right now it only works while your laptop is on and ngrok is running. To make it
 
 Everything below can be done by **just texting the bot** — no code, no dashboard.
 
-**Narrow it to what you actually care about:**
+**It already ships tuned:** market cap **$50M–$20B**, all industries **except banks and biotech**, and 20 corporate-event keywords. Change any of it by texting:
 
 ```
-only small caps under $2B
-just biotech and medtech
+set my market cap range from 100 million to 10 billion
+also skip insurance
+actually include biotech again
 don't alert me about anything on the OTC
 ```
+
+Setting a market cap range **replaces** the old one rather than widening it, so you can just state the new range.
 
 **Add or remove triggers:**
 

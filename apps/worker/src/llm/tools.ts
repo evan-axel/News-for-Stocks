@@ -159,10 +159,22 @@ export const CHAT_TOOLS: Anthropic.Tool[] = [
         filter_value: {
           type: 'string',
           description:
-            'For add_filter with a text kind: the value, e.g. "Biotechnology". For market_cap: a preset name (nano, micro, small, mid, large, mega).',
+            'For add_filter with a text kind: the value, e.g. "Biotechnology" or "bank" (matched as a case-insensitive substring of the company\'s industry/sector). For market_cap: optionally a preset name (nano, micro, small, mid, large, mega) instead of explicit bounds.',
         },
-        min_market_cap: { type: 'number', description: 'For add_filter market_cap: USD lower bound.' },
-        max_market_cap: { type: 'number', description: 'For add_filter market_cap: USD upper bound.' },
+        min_market_cap: {
+          type: 'number',
+          description:
+            'For add_filter market_cap: lower bound in US dollars. "50 million" is 50000000. Setting a market_cap filter REPLACES any existing one, so always pass the full range the user wants.',
+        },
+        max_market_cap: {
+          type: 'number',
+          description: 'For add_filter market_cap: upper bound in US dollars. "20 billion" is 20000000000.',
+        },
+        match_term_literally: {
+          type: 'boolean',
+          description:
+            'For add_keyword. Default true. Set false when the term is too generic to match on its own (like "transformation" or "growth") — the term then acts as a display label and only the synonyms trigger alerts. If you set this false you MUST supply synonyms.',
+        },
         mode: {
           type: 'string',
           enum: ['include', 'exclude'],
@@ -454,8 +466,14 @@ function updateWatchConfig(input: ToolInput, repo: Repo): string {
       const synonyms = Array.isArray(input.synonyms)
         ? (input.synonyms as unknown[]).filter((s): s is string => typeof s === 'string')
         : [];
-      const kw = repo.upsertKeyword({ term, synonyms });
-      return `Now watching "${kw.term}"${synonyms.length ? ` plus ${synonyms.length} variant(s)` : ''}.`;
+      const matchTerm = input.match_term_literally !== false;
+      if (!matchTerm && synonyms.length === 0) {
+        return 'A label-only keyword needs synonyms, otherwise it can never match. Supply synonyms or let the term match literally.';
+      }
+      const kw = repo.upsertKeyword({ term, synonyms, matchTerm });
+      return `Now watching "${kw.term}"${
+        synonyms.length ? ` via ${synonyms.length} phrase(s)` : ''
+      }${matchTerm ? '' : ' (label only — matches on the phrases, not the bare word)'}.`;
     }
 
     case 'remove_keyword': {
@@ -479,8 +497,17 @@ function updateWatchConfig(input: ToolInput, repo: Repo): string {
         if (min === null && max === null) {
           return `market_cap filter needs a preset (${Object.keys(MARKET_CAP_PRESETS).join(', ')}) or explicit bounds.`;
         }
+
+        // Size is a single range, not a set of alternatives. Two include-filters
+        // of the same kind OR together, which would silently *widen* the band
+        // instead of changing it — so replace rather than accumulate.
+        const replaced = repo.listFilters().filter(
+          (f) => f.kind === 'market_cap' && f.mode === mode,
+        );
+        for (const old of replaced) repo.deleteFilter(old.id);
+
         const f = repo.addFilter({ kind, minValue: min, maxValue: max, mode });
-        return `Added filter [${f.id}] ${mode}: ${describeFilter(f)}.`;
+        return `${replaced.length ? 'Market cap range updated' : 'Added filter'} [${f.id}] ${mode}: ${describeFilter(f)}.`;
       }
 
       const value = str(input.filter_value);

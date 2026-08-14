@@ -90,7 +90,7 @@ export function createServer(repo: Repo) {
   api.get('/keywords', (_req, res) => res.json(repo.listKeywords()));
 
   api.post('/keywords', (req, res) => {
-    const { term, synonyms, negations } = req.body ?? {};
+    const { term, synonyms, negations, matchTerm } = req.body ?? {};
     if (typeof term !== 'string' || !term.trim()) {
       res.status(400).json({ error: 'term is required' });
       return;
@@ -100,6 +100,7 @@ export function createServer(repo: Repo) {
         term,
         synonyms: Array.isArray(synonyms) ? synonyms : [],
         negations: Array.isArray(negations) ? negations : [],
+        matchTerm: matchTerm !== false,
       }),
     );
   });

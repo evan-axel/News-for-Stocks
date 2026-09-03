@@ -1,0 +1,16 @@
+node_modules/
+.next/
+out/
+build/
+
+# Secrets — never commit
+.env
+.env.local
+.env*.local
+
+# Your research journal. Private by default: theses, positions and
+# post-mortems should not end up in a git remote.
+data/
+
+.DS_Store
+*.log

@@ -1,7 +1,7 @@
 "use client"; // Add this line at the very top
 
 import React, { useState, useEffect } from 'react';
-import { Search as SearchIcon, Calendar, Tag } from 'lucide-react';
+import { Search as SearchIcon, Calendar } from 'lucide-react';
 
 // Keyword mapping for similar terms
 const KeywordMapper = {
@@ -76,10 +76,8 @@ const handleSearch = async () => {
         throw new Error(data.details || 'Search failed');
       }
       
-      setResults(data.hits || []);
-      
-      // Log results for debugging
-      console.log('Setting results:', data.hits || []);
+      // The route responds with { results }, not { hits }.
+      setResults(data.results || []);
       
     } catch (err) {
       setError(`Search error: ${err.message}`);
@@ -98,19 +96,8 @@ const handleSearch = async () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <nav className="bg-white shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between h-16">
-            <div className="flex items-center">
-              <Tag className="h-6 w-6 text-blue-500" />
-              <span className="ml-2 text-xl font-semibold">SmallCap Scanner</span>
-            </div>
-          </div>
-        </div>
-      </nav>
-
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div>
+      <main>
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900">Small Cap Stock Search</h1>
           <p className="mt-2 text-gray-600">Search through current week's small cap stocks and news</p>

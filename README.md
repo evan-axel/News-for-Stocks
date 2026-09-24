@@ -1,4 +1,83 @@
-# Thesis Journal
+# Research Desk
+
+Two tools that share a repo:
+
+- **[SEC filings](#sec-filings)** (`/research`) — search filings by company and
+  form type, read the text with an analyst summary beside it, and ask questions
+  answered only from the filings, with every claim citing the span it came from.
+- **[Thesis journal](#thesis-journal)** (`/`) — pre-registered theses, dated
+  falsifiers, and value-investing checklists.
+
+## Running it
+
+```bash
+npm install
+cp .env.example .env    # fill in SEC_USER_AGENT at minimum
+npm run dev             # http://localhost:3000
+```
+
+---
+
+# SEC filings
+
+## Setup
+
+`SEC_USER_AGENT` is **required** — SEC asks every automated client to declare a
+contact address and blocks those that don't. Format: `"Your Name you@email.com"`.
+Requests are throttled to 8/sec, under SEC's 10/sec ceiling.
+
+`ANTHROPIC_API_KEY` is needed for summaries and the Ask panel. Search and reading
+filing text work without it.
+
+## How it works
+
+**Search.** Company lookup resolves a ticker, name, or CIK against SEC's own
+ticker map. Filing lists come from the submissions feed; the last year is
+immediate, and "full history" pulls the older archive pages. 8-K item codes are
+surfaced as labels — Item 5.02 is an officer departure, 2.03 a new financial
+obligation. That taxonomy is more reliable than keyword-matching a headline,
+because the filer is legally required to classify the event themselves.
+
+**Reading.** Filing HTML is stripped to plain text, keeping table cell and row
+boundaries so figures stay attached to their labels. Documents are cached to
+disk permanently — an accepted filing never changes.
+
+**Summaries.** An analyst read in fixed sections (what this is, why it matters,
+key facts, watch items, questions this raises), cached to disk so a filing is
+only ever paid for once.
+
+**Ask.** Two scopes. *This filing* answers from the open document. *Company
+history* chunks the recent filings into one pool, retrieves the best passages
+regardless of which filing they came from, and cites the form and date of each.
+
+**Citations.** Every claim carries the span of filing text that supports it.
+Clicking a citation highlights that exact span in the document pane. Under
+~600k characters a filing is sent whole; above that, BM25 retrieval selects
+passages and each one carries its offset, so highlights still land correctly.
+
+Retrieval is lexical, not embedding-based: filings questions are asked in the
+filing's own vocabulary, exact tokens like `5.02` and `2027` matter, and it
+keeps the app to one API key. Queries are expanded first
+(`src/lib/rag/retrieve.js`) because a reader types "CFO" where the document says
+"Chief Financial Officer".
+
+## Layout
+
+```
+src/lib/sec/client.js      throttled, cached EDGAR fetch
+src/lib/sec/companies.js   ticker / name / CIK resolution
+src/lib/sec/filings.js     submissions feed, form and item filtering
+src/lib/sec/document.js    filing HTML -> text, section detection
+src/lib/rag/retrieve.js    chunking, BM25, query expansion
+src/lib/ai/context.js      whole-document vs. retrieved-passage selection
+src/lib/ai/summarize.js    cached filing summaries
+src/lib/ai/chat.js         grounded Q&A
+src/app/research/          search and the split-pane viewer
+```
+
+---
+
+# Thesis journal
 
 A pre-registered investment journal. You write down what has to be true and what
 would prove you wrong — with dates — *before* you buy. When a date arrives, the
@@ -8,17 +87,7 @@ The premise is that a journal you can quietly edit tells you nothing about your
 own judgement later. So the reasoning you enter at the start is frozen, and
 everything you think afterwards is appended beside it.
 
-## Running it
-
-```bash
-npm install
-npm run dev          # http://localhost:3000
-```
-
-No API key is needed for the journal. `.env` is only used by the `/scanner`
-page (see below).
-
-Your journal lives in `data/theses.json`, which is gitignored — theses,
+No API key is needed for the journal. Your journal lives in `data/theses.json`, which is gitignored — theses,
 positions and post-mortems stay on your machine. Back it up like any other
 private file.
 

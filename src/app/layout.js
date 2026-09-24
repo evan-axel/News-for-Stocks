@@ -1,10 +1,10 @@
 import './globals.css';
 import Link from 'next/link';
-import { BookMarked, Plus, Radar } from 'lucide-react';
+import { BookMarked, FileSearch, Plus, Radar } from 'lucide-react';
 
 export const metadata = {
-  title: 'Thesis Journal',
-  description: 'Pre-registered investment theses, falsifiers and value-investing checklists',
+  title: 'Research Desk',
+  description: 'SEC filing research, pre-registered theses and value-investing checklists',
 };
 
 export default function RootLayout({ children }) {
@@ -12,12 +12,16 @@ export default function RootLayout({ children }) {
     <html lang="en">
       <body>
         <nav className="border-b border-slate-200 bg-white">
-          <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6 lg:px-8">
+          <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
             <Link href="/" className="flex items-center gap-2">
               <BookMarked className="h-5 w-5 text-indigo-600" />
-              <span className="text-lg font-semibold tracking-tight">Thesis Journal</span>
+              <span className="text-lg font-semibold tracking-tight">Research Desk</span>
             </Link>
             <div className="flex items-center gap-2">
+              <Link href="/research" className="btn-secondary">
+                <FileSearch size={16} />
+                Filings
+              </Link>
               <Link href="/scanner" className="btn-secondary">
                 <Radar size={16} />
                 Scanner
@@ -29,7 +33,7 @@ export default function RootLayout({ children }) {
             </div>
           </div>
         </nav>
-        <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">{children}</main>
+        <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">{children}</main>
       </body>
     </html>
   );

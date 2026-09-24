@@ -1,6 +1,6 @@
 import './globals.css';
 import Link from 'next/link';
-import { BookMarked, FileSearch, Plus, Radar } from 'lucide-react';
+import { BookMarked, FileSearch, LayoutGrid, Plus } from 'lucide-react';
 
 export const metadata = {
   title: 'Research Desk',
@@ -18,13 +18,13 @@ export default function RootLayout({ children }) {
               <span className="text-lg font-semibold tracking-tight">Research Desk</span>
             </Link>
             <div className="flex items-center gap-2">
+              <Link href="/dashboard" className="btn-secondary">
+                <LayoutGrid size={16} />
+                Coverage
+              </Link>
               <Link href="/research" className="btn-secondary">
                 <FileSearch size={16} />
                 Filings
-              </Link>
-              <Link href="/scanner" className="btn-secondary">
-                <Radar size={16} />
-                Scanner
               </Link>
               <Link href="/thesis/new" className="btn-primary">
                 <Plus size={16} />

@@ -1,7 +1,10 @@
 # Research Desk
 
-Two tools that share a repo:
+Three tools that share a repo:
 
+- **[Coverage dashboard](#coverage-dashboard)** (`/dashboard`) — your universe by
+  sector, and per name: reported financials, valuation against its own history,
+  your numbers against the street's, catalysts, and a filings feed.
 - **[SEC filings](#sec-filings)** (`/research`) — search filings by company and
   form type, read the text with an analyst summary beside it, and ask questions
   answered only from the filings, with every claim citing the span it came from.
@@ -15,6 +18,63 @@ npm install
 cp .env.example .env    # fill in SEC_USER_AGENT at minimum
 npm run dev             # http://localhost:3000
 ```
+
+---
+
+# Coverage dashboard
+
+Your names, grouped by sector, and a tabbed view per name.
+
+## Data providers
+
+The dashboard never talks to a vendor directly. Each provider declares which
+capabilities it serves, and every panel asks the registry for a *capability*
+rather than a vendor — so a missing key removes a panel and names the variable
+that would fill it, instead of breaking the page.
+
+| Capability | Served by | Needs |
+| --- | --- | --- |
+| `fundamentals` | SEC EDGAR XBRL | `SEC_USER_AGENT` |
+| `quote`, `priceHistory`, `estimates`, `profile` | Financial Modeling Prep | `FMP_API_KEY` |
+
+**With no vendor key at all**, reported financials, derived metrics, the filings
+feed, catalysts and your own estimates all work — that is the whole statement
+section and most of the snapshot. Price, valuation-vs-history, earnings reaction
+and street consensus are the parts that need a market data provider.
+
+To swap FMP for Polygon, Tiingo or an internal feed, write one adapter returning
+the same normalized shapes (`src/lib/market/fmp.js` is the worked example) and
+list it in `src/lib/market/index.js`. No panel changes.
+
+## Tabs
+
+- **Snapshot** — price, market cap, P/E against its own range, your tracked KPIs
+  with sparklines and YoY, the one-day price reaction to each recent earnings
+  filing, and upcoming catalysts.
+- **Financials** — income statement, balance sheet and cash flow as reported,
+  annual or quarterly, plus derived margins, FCF, net debt and returns. Straight
+  from SEC XBRL company facts.
+- **Valuation** — P/E and P/S over time with the full observed range shaded and
+  the median marked, plus where today sits as a percentile. A multiple means
+  nothing until you know the name's own range.
+- **My numbers vs street** — your revenue/EPS/EBITDA per fiscal year against
+  consensus, with the delta, and against what was actually reported once the
+  year closes.
+- **Catalysts** — dated events, surfaced back on the coverage grid.
+- **Filings** — the company's filings with 8-K item labels, each opening in the
+  reader with its summary and Q&A.
+
+## Notes on the fundamentals
+
+Filers tag the same line item with different us-gaap concepts depending on era
+and industry, so each line is a fallback chain
+(`src/lib/market/concepts.js`) — revenue alone has four common spellings.
+
+Periods are separated by duration: an annual fact spans ~365 days, a quarterly
+one ~91. Where a period was later restated, the **value** comes from the most
+recently filed version but the **period identity** comes from the earliest —
+a restated figure carries the later filing's fiscal-year context, so taking the
+year from it would relabel FY2024 as FY2025.
 
 ---
 
